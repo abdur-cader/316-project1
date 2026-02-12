@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from io import StringIO
 
 # PySpark imports
@@ -125,6 +126,12 @@ df = df.withColumn(
     datediff(col("APPROVED_DATE"), col("APPLICATION_DATE"))
 )
 
+# Fill null processing days (e.g., missing dates) so it can be used as a feature
+df = df.withColumn(
+    "PROCESSING_DAYS",
+    when(col("PROCESSING_DAYS").isNull(), lit(0)).otherwise(col("PROCESSING_DAYS"))
+)
+
 # 4. Create binary TARGET variable (1 = Approved/موافقة, 0 = Other statuses)
 # Note: موافقة = Approved, منتفـع = Beneficiary (already received benefit)
 df = df.withColumn(
@@ -187,6 +194,29 @@ print("\nNumerical Features Summary:")
 df.select("AGE_AT_APPLICATION", "APPLICANT_FAMILY_COUNT", "APPLICATION_YEAR").describe().show()
 
 # ============================================================================
+# HEATMAP 1: FEATURE CORRELATION (NUMERICAL FEATURES)
+# ============================================================================
+
+print("\n" + "=" * 70)
+print("HEATMAP: FEATURE CORRELATION")
+print("=" * 70)
+
+numeric_pdf = df.select(
+    "AGE_AT_APPLICATION",
+    "APPLICANT_FAMILY_COUNT",
+    "APPLICATION_YEAR",
+    "PROCESSING_DAYS",
+).toPandas()
+
+corr = numeric_pdf.corr(numeric_only=True)
+plt.figure(figsize=(8, 6))
+sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", square=True, cbar=True)
+plt.title("Correlation Heatmap (Numerical Features)", fontweight="bold")
+plt.tight_layout()
+plt.savefig(f"{OUTPUT_DIR}/feature_correlation_heatmap.png", dpi=150, bbox_inches="tight")
+plt.close()
+
+# ============================================================================
 # FEATURE TRANSFORMATION PIPELINE
 # ============================================================================
 
@@ -207,6 +237,24 @@ gender_indexer = StringIndexer(
     handleInvalid="keep"
 )
 
+age_group_indexer = StringIndexer(
+    inputCol="AGE_GROUP",
+    outputCol="AGE_GROUP_IDX",
+    handleInvalid="keep"
+)
+
+family_size_indexer = StringIndexer(
+    inputCol="FAMILY_SIZE_CATEGORY",
+    outputCol="FAMILY_SIZE_CATEGORY_IDX",
+    handleInvalid="keep"
+)
+
+service_type_indexer = StringIndexer(
+    inputCol="SERVICE_TYPE_NAME",
+    outputCol="SERVICE_TYPE_NAME_IDX",
+    handleInvalid="keep"
+)
+
 # One-hot encode indexed columns
 marital_encoder = OneHotEncoder(
     inputCol="MARITAL_STATUS_IDX",
@@ -218,13 +266,32 @@ gender_encoder = OneHotEncoder(
     outputCol="GENDER_DESC_VEC"
 )
 
+age_group_encoder = OneHotEncoder(
+    inputCol="AGE_GROUP_IDX",
+    outputCol="AGE_GROUP_VEC"
+)
+
+family_size_encoder = OneHotEncoder(
+    inputCol="FAMILY_SIZE_CATEGORY_IDX",
+    outputCol="FAMILY_SIZE_CATEGORY_VEC"
+)
+
+service_type_encoder = OneHotEncoder(
+    inputCol="SERVICE_TYPE_NAME_IDX",
+    outputCol="SERVICE_TYPE_NAME_VEC"
+)
+
 # Assemble all features
 feature_cols = [
     "AGE_AT_APPLICATION",
     "APPLICANT_FAMILY_COUNT",
     "APPLICATION_YEAR",
+    "PROCESSING_DAYS",
     "MARITAL_STATUS_VEC",
-    "GENDER_DESC_VEC"
+    "GENDER_DESC_VEC",
+    "AGE_GROUP_VEC",
+    "FAMILY_SIZE_CATEGORY_VEC",
+    "SERVICE_TYPE_NAME_VEC",
 ]
 
 assembler = VectorAssembler(
@@ -245,8 +312,14 @@ scaler = StandardScaler(
 preprocessing_pipeline = Pipeline(stages=[
     marital_indexer,
     gender_indexer,
+    age_group_indexer,
+    family_size_indexer,
+    service_type_indexer,
     marital_encoder,
     gender_encoder,
+    age_group_encoder,
+    family_size_encoder,
+    service_type_encoder,
     assembler,
     scaler
 ])
@@ -508,6 +581,37 @@ final_gbt = GBTClassifier(
 )
 
 final_gbt_model = final_gbt.fit(df_transformed)
+
+# ============================================================================
+# HEATMAP 2: CONFUSION MATRIX (GBT MODEL ON FULL DATASET)
+# ============================================================================
+
+print("\n" + "=" * 70)
+print("HEATMAP: CONFUSION MATRIX (GBT)")
+print("=" * 70)
+
+final_predictions = final_gbt_model.transform(df_transformed)
+confusion_sdf = (
+    final_predictions.groupBy("APPROVAL_LABEL", "prediction")
+    .count()
+)
+confusion_pdf = confusion_sdf.toPandas()
+
+# Build 2x2 confusion matrix table (labels 0/1)
+cm = pd.DataFrame(0, index=[0, 1], columns=[0, 1])
+for _, r in confusion_pdf.iterrows():
+    true_lbl = int(r["APPROVAL_LABEL"])
+    pred_lbl = int(r["prediction"])
+    cm.loc[true_lbl, pred_lbl] = int(r["count"])
+
+plt.figure(figsize=(6, 5))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False)
+plt.xlabel("Predicted Label")
+plt.ylabel("True Label")
+plt.title("Confusion Matrix Heatmap (GBT, full dataset)", fontweight="bold")
+plt.tight_layout()
+plt.savefig(f"{OUTPUT_DIR}/confusion_matrix_heatmap.png", dpi=150, bbox_inches="tight")
+plt.close()
 
 # Get feature importances
 feature_names = [
