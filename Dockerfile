@@ -1,13 +1,11 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # Spark (PySpark) requires Java.
+# Keep OS packages minimal to avoid Debian package-name drift.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     openjdk-17-jre-headless \
     ca-certificates \
-    fonts-dejavu-core \
-    libfreetype6 \
-    libpng16-16 \
   && rm -rf /var/lib/apt/lists/*
 
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
