@@ -8,10 +8,22 @@ from io import StringIO
 # PySpark imports
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col, when, year, datediff, currentdate, lit, monthsbetween, floor,
-    todate, count, avg, min, max, stddev, monotonicallyincreasingid
+    col, when, year, datediff, lit, monthsbetween, floor,
+    count, avg, min, max, stddev
 )
 from pyspark.sql.types import IntegerType
+
+# ---------------------------------------------------------------------------
+# PySpark compatibility aliases
+# ---------------------------------------------------------------------------
+# Some function names in this file use older/non-standard identifiers.
+# Keep the rest of the script unchanged by mapping them to the canonical
+# PySpark SQL function names.
+from pyspark.sql.functions import (  # noqa: E402
+    current_date as currentdate,
+    to_date as todate,
+    monotonically_increasing_id as monotonicallyincreasingid,
+)
 
 # ML imports
 from pyspark.ml.feature import (
