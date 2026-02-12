@@ -84,14 +84,14 @@ print("DATA CLEANING")
 print("=" * 70)
 
 # Drop rows with missing values in key columns
-columns_to_check = ["AGE", "APPLICANTFAMILYCOUNT", "MARITALSTATUS", "GENDERDESC"]
+columns_to_check = ["AGE", "APPLICANT_FAMILY_COUNT", "MARITAL_STATUS", "GENDER_DESC"]
 df = df.dropna(subset=columns_to_check)
 print(f"Rows after dropping nulls: {df.count()}")
 
 # Convert timestamp columns to date type
-df = df.withColumn("APPLICATIONDATE", todate(col("APPLICATIONDATE")))
-df = df.withColumn("APPROVEDDATE", todate(col("APPROVEDDATE")))
-df = df.withColumn("APPLICANTBIRTHDATE", todate(col("APPLICANTBIRTHDATE")))
+df = df.withColumn("APPLICATION_DATE", todate(col("APPLICATION_DATE")))
+df = df.withColumn("APPROVED_DATE", todate(col("APPROVED_DATE")))
+df = df.withColumn("APPLICANT_BIRTH_DATE", todate(col("APPLICANT_BIRTH_DATE")))
 
 # Cast AGE to IntegerType
 df = df.withColumn("AGE", col("AGE").cast(IntegerType()))
@@ -110,50 +110,51 @@ print("\n" + "=" * 70)
 print("FEATURE ENGINEERING")
 print("=" * 70)
 
-# 1. Calculate age at time of application
+# 1. Calculate AGE at time of application (more accurate than current age)
 df = df.withColumn(
-    "AGEATAPPLICATION",
-    floor(monthsbetween(col("APPLICATIONDATE"), col("APPLICANTBIRTHDATE")) / 12)
+    "AGE_AT_APPLICATION",
+    floor(monthsbetween(col("APPLICATION_DATE"), col("APPLICANT_BIRTH_DATE")) / 12)
 )
 
-# 2. Extract application year
-df = df.withColumn("APPLICATIONYEAR", year(col("APPLICATIONDATE")))
+# 2. Extract APPLICATION_YEAR as a feature
+df = df.withColumn("APPLICATION_YEAR", year(col("APPLICATION_DATE")))
 
-# 3. Calculate processing days
+# 3. Calculate PROCESSING_DAYS (difference between approval and application)
 df = df.withColumn(
-    "PROCESSINGDAYS",
-    datediff(col("APPROVEDDATE"), col("APPLICATIONDATE"))
+    "PROCESSING_DAYS",
+    datediff(col("APPROVED_DATE"), col("APPLICATION_DATE"))
 )
 
-# 4. Create binary target: 1 if Approved, 0 otherwise
+# 4. Create binary TARGET variable (1 = Approved/موافقة, 0 = Other statuses)
+# Note: موافقة = Approved, منتفـع = Beneficiary (already received benefit)
 df = df.withColumn(
-    "APPROVALLABEL",
-    when(col("APPLICATIONSTATUSNAME") == "Approved, Beneficiary already received benefit", 1).otherwise(0)
+    "APPROVAL_LABEL",
+    when(col("APPLICATION_STATUS_NAME") == "موافقة", 1).otherwise(0)
 )
 
-# 5. Create age groups
+# 5. Create AGE GROUP categories for additional analysis
 df = df.withColumn(
-    "AGEGROUP",
-    when(col("AGEATAPPLICATION") < 25, "Young 18-24")
-    .when(col("AGEATAPPLICATION") < 35, "Young Adult 25-34")
-    .when(col("AGEATAPPLICATION") < 45, "Middle Age 35-44")
-    .when(col("AGEATAPPLICATION") < 55, "Mature 45-54")
-    .when(col("AGEATAPPLICATION") < 65, "Senior 55-64")
-    .otherwise("Elderly 65+")
+    "AGE_GROUP",
+    when(col("AGE_AT_APPLICATION") < 25, "Young (18-24)")
+    .when(col("AGE_AT_APPLICATION") < 35, "Young Adult (25-34)")
+    .when(col("AGE_AT_APPLICATION") < 45, "Middle Age (35-44)")
+    .when(col("AGE_AT_APPLICATION") < 55, "Mature (45-54)")
+    .when(col("AGE_AT_APPLICATION") < 65, "Senior (55-64)")
+    .otherwise("Elderly (65+)")
 )
 
-# 6. Create family size categories
+# 6. Create FAMILY_SIZE_CATEGORY
 df = df.withColumn(
-    "FAMILYSIZECATEGORY",
-    when(col("APPLICANTFAMILYCOUNT") == 0, "No Dependents")
-    .when(col("APPLICANTFAMILYCOUNT") <= 2, "Small 1-2")
-    .when(col("APPLICANTFAMILYCOUNT") <= 4, "Medium 3-4")
-    .when(col("APPLICANTFAMILYCOUNT") <= 6, "Large 5-6")
-    .otherwise("Very Large 7+")
+    "FAMILY_SIZE_CATEGORY",
+    when(col("APPLICANT_FAMILY_COUNT") == 0, "No Dependents")
+    .when(col("APPLICANT_FAMILY_COUNT") <= 2, "Small (1-2)")
+    .when(col("APPLICANT_FAMILY_COUNT") <= 4, "Medium (3-4)")
+    .when(col("APPLICANT_FAMILY_COUNT") <= 6, "Large (5-6)")
+    .otherwise("Very Large (7+)")
 )
 
-# Filter out invalid ages
-df = df.filter((col("AGEATAPPLICATION") >= 18) & (col("AGEATAPPLICATION") <= 100))
+# Filter out invalid ages (negative or too old)
+df = df.filter((col("AGE_AT_APPLICATION") >= 18) & (col("AGE_AT_APPLICATION") <= 100))
 
 print("\nDataset after feature engineering:")
 df.printSchema()
@@ -167,23 +168,23 @@ print("\n" + "=" * 70)
 print("EXPLORATORY DATA ANALYSIS")
 print("=" * 70)
 
-print("\nTarget Variable Distribution (APPROVALLABEL):")
-df.groupBy("APPROVALLABEL").count().show()
+print("\nTarget Variable Distribution (APPROVAL_LABEL):")
+df.groupBy("APPROVAL_LABEL").count().show()
 
 print("\nMarital Status Distribution:")
-df.groupBy("MARITALSTATUS").count().orderBy("count", ascending=False).show()
+df.groupBy("MARITAL_STATUS").count().orderBy("count", ascending=False).show()
 
 print("\nGender Distribution:")
-df.groupBy("GENDERDESC").count().orderBy("count", ascending=False).show()
+df.groupBy("GENDER_DESC").count().orderBy("count", ascending=False).show()
 
 print("\nAge Group Distribution:")
-df.groupBy("AGEGROUP").count().orderBy("count", ascending=False).show()
+df.groupBy("AGE_GROUP").count().orderBy("count", ascending=False).show()
 
 print("\nFamily Size Category Distribution:")
-df.groupBy("FAMILYSIZECATEGORY").count().orderBy("count", ascending=False).show()
+df.groupBy("FAMILY_SIZE_CATEGORY").count().orderBy("count", ascending=False).show()
 
 print("\nNumerical Features Summary:")
-df.select("AGEATAPPLICATION", "APPLICANTFAMILYCOUNT", "APPLICATIONYEAR").describe().show()
+df.select("AGE_AT_APPLICATION", "APPLICANT_FAMILY_COUNT", "APPLICATION_YEAR").describe().show()
 
 # ============================================================================
 # FEATURE TRANSFORMATION PIPELINE
@@ -195,35 +196,35 @@ print("=" * 70)
 
 # Index categorical columns
 marital_indexer = StringIndexer(
-    inputCol="MARITALSTATUS",
-    outputCol="MARITALSTATUSIDX",
+    inputCol="MARITAL_STATUS",
+    outputCol="MARITAL_STATUS_IDX",
     handleInvalid="keep"
 )
 
 gender_indexer = StringIndexer(
-    inputCol="GENDERDESC",
-    outputCol="GENDERDESCIDX",
+    inputCol="GENDER_DESC",
+    outputCol="GENDER_DESC_IDX",
     handleInvalid="keep"
 )
 
 # One-hot encode indexed columns
 marital_encoder = OneHotEncoder(
-    inputCol="MARITALSTATUSIDX",
-    outputCol="MARITALSTATUSVEC"
+    inputCol="MARITAL_STATUS_IDX",
+    outputCol="MARITAL_STATUS_VEC"
 )
 
 gender_encoder = OneHotEncoder(
-    inputCol="GENDERDESCIDX",
-    outputCol="GENDERDESCVEC"
+    inputCol="GENDER_DESC_IDX",
+    outputCol="GENDER_DESC_VEC"
 )
 
 # Assemble all features
 feature_cols = [
-    "AGEATAPPLICATION",
-    "APPLICANTFAMILYCOUNT",
-    "APPLICATIONYEAR",
-    "MARITALSTATUSVEC",
-    "GENDERDESCVEC"
+    "AGE_AT_APPLICATION",
+    "APPLICANT_FAMILY_COUNT",
+    "APPLICATION_YEAR",
+    "MARITAL_STATUS_VEC",
+    "GENDER_DESC_VEC"
 ]
 
 assembler = VectorAssembler(
@@ -257,7 +258,7 @@ df_transformed = pipeline_model.transform(df)
 print("\nTransformed Dataset Schema:")
 df_transformed.printSchema()
 print("\nSample of transformed data (features & label):")
-df_transformed.select("features", "APPROVALLABEL").show(5, truncate=False)
+df_transformed.select("features", "APPROVAL_LABEL").show(5, truncate=False)
 print(f"Total samples for ML: {df_transformed.count()}")
 
 # ============================================================================
@@ -269,7 +270,7 @@ print("MANUAL 10-FOLD CROSS-VALIDATION IMPLEMENTATION")
 print("=" * 70)
 
 
-def manual_kfold_cross_validation(df, model, k=10, labelcol="APPROVALLABEL", featurescol="features"):
+def manual_kfold_cross_validation(df, model, k=10, label_col="APPROVAL_LABEL", features_col="features"):
     """
     Manually implement k-fold cross-validation for SparkML models.
 
@@ -277,21 +278,21 @@ def manual_kfold_cross_validation(df, model, k=10, labelcol="APPROVALLABEL", fea
     - df: Transformed DataFrame with features
     - model: SparkML classifier (untrained)
     - k: Number of folds (default 10)
-    - labelcol: Name of label column
-    - featurescol: Name of features column
+    - label_col: Name of label column
+    - features_col: Name of features column
 
     Returns:
     - Dictionary with average metrics across all folds
     """
 
     # Add fold assignment column
-    df_with_id = df.withColumn("rowid", monotonicallyincreasingid())
+    df_with_id = df.withColumn("row_id", monotonicallyincreasingid())
     total_count = df_with_id.count()
     fold_size = total_count // k
 
     df_with_fold = df_with_id.withColumn(
         "fold",
-        (col("rowid") % k).cast(IntegerType())
+        (col("row_id") % k).cast(IntegerType())
     )
 
     # Initialize metrics storage
@@ -303,31 +304,31 @@ def manual_kfold_cross_validation(df, model, k=10, labelcol="APPROVALLABEL", fea
 
     # Define evaluators
     auc_evaluator = BinaryClassificationEvaluator(
-        labelCol=labelcol,
+        labelCol=label_col,
         rawPredictionCol="rawPrediction",
         metricName="areaUnderROC"
     )
 
     accuracy_evaluator = MulticlassClassificationEvaluator(
-        labelCol=labelcol,
+        labelCol=label_col,
         predictionCol="prediction",
         metricName="accuracy"
     )
 
     precision_evaluator = MulticlassClassificationEvaluator(
-        labelCol=labelcol,
+        labelCol=label_col,
         predictionCol="prediction",
         metricName="weightedPrecision"
     )
 
     recall_evaluator = MulticlassClassificationEvaluator(
-        labelCol=labelcol,
+        labelCol=label_col,
         predictionCol="prediction",
         metricName="weightedRecall"
     )
 
     f1_evaluator = MulticlassClassificationEvaluator(
-        labelCol=labelcol,
+        labelCol=label_col,
         predictionCol="prediction",
         metricName="f1"
     )
@@ -390,7 +391,7 @@ print("MODEL 1: GRADIENT BOOSTED TREES (GBT) - BOOSTING")
 print("=" * 70)
 
 gbt_classifier = GBTClassifier(
-    labelCol="APPROVALLABEL",
+    labelCol="APPROVAL_LABEL",
     featuresCol="features",
     maxIter=50,
     maxDepth=5,
@@ -403,8 +404,8 @@ gbt_results = manual_kfold_cross_validation(
     df=df_transformed,
     model=gbt_classifier,
     k=10,
-    labelcol="APPROVALLABEL",
-    featurescol="features"
+    label_col="APPROVAL_LABEL",
+    features_col="features"
 )
 
 # ============================================================================
@@ -416,7 +417,7 @@ print("MODEL 2: RANDOM FOREST (BAGGING) - COMPARISON")
 print("=" * 70)
 
 rf_classifier = RandomForestClassifier(
-    labelCol="APPROVALLABEL",
+    labelCol="APPROVAL_LABEL",
     featuresCol="features",
     numTrees=100,
     maxDepth=10,
@@ -429,8 +430,8 @@ rf_results = manual_kfold_cross_validation(
     df=df_transformed,
     model=rf_classifier,
     k=10,
-    labelcol="APPROVALLABEL",
-    featurescol="features"
+    label_col="APPROVAL_LABEL",
+    features_col="features"
 )
 
 # ============================================================================
@@ -442,7 +443,7 @@ print("MODEL 3: LOGISTIC REGRESSION (BASELINE)")
 print("=" * 70)
 
 lr_classifier = LogisticRegression(
-    labelCol="APPROVALLABEL",
+    labelCol="APPROVAL_LABEL",
     featuresCol="features",
     maxIter=100,
     regParam=0.01,
@@ -453,8 +454,8 @@ lr_results = manual_kfold_cross_validation(
     df=df_transformed,
     model=lr_classifier,
     k=10,
-    labelcol="APPROVALLABEL",
-    featurescol="features"
+    label_col="APPROVAL_LABEL",
+    features_col="features"
 )
 
 # ============================================================================
@@ -498,7 +499,7 @@ print("=" * 70)
 
 # Train final GBT model on full dataset
 final_gbt = GBTClassifier(
-    labelCol="APPROVALLABEL",
+    labelCol="APPROVAL_LABEL",
     featuresCol="features",
     maxIter=50,
     maxDepth=5,
@@ -510,19 +511,19 @@ final_gbt_model = final_gbt.fit(df_transformed)
 
 # Get feature importances
 feature_names = [
-    "AGEATAPPLICATION",
-    "APPLICANTFAMILYCOUNT",
-    "APPLICATIONYEAR",
-    "MARITALSTATUS_1", "MARITALSTATUS_2", "MARITALSTATUS_3", "MARITALSTATUS_4",
+    "AGE_AT_APPLICATION",
+    "APPLICANT_FAMILY_COUNT",
+    "APPLICATION_YEAR",
+    "MARITAL_STATUS_1", "MARITAL_STATUS_2", "MARITAL_STATUS_3", "MARITAL_STATUS_4",
     "GENDER_1", "GENDER_2"
 ]
 
 importances = final_gbt_model.featureImportances.toArray()
 
-# Handle feature name mismatches
-if len(importances) != len(feature_names):
+# Handle case where feature names don't match
+if len(importances) > len(feature_names):
     feature_names = [f"Feature_{i}" for i in range(len(importances))]
-    feature_names[:3] = ["AGEATAPPLICATION", "APPLICANTFAMILYCOUNT", "APPLICATIONYEAR"]
+    feature_names[:3] = ["AGE_AT_APPLICATION", "APPLICANT_FAMILY_COUNT", "APPLICATION_YEAR"]
 
 importance_df = pd.DataFrame({
     "Feature": feature_names[:len(importances)],
@@ -611,23 +612,23 @@ for cluster_id in range(optimal_k):
     print(f"\nCLUSTER {cluster_id}: {cluster_count} applicants")
 
     # Average age
-    avg_age = cluster_data.agg(avg("AGEATAPPLICATION")).collect()[0][0]
+    avg_age = cluster_data.agg(avg("AGE_AT_APPLICATION")).collect()[0][0]
     print(f"  Average Age at Application: {avg_age:.1f} years")
 
     # Average family count
-    avg_family = cluster_data.agg(avg("APPLICANTFAMILYCOUNT")).collect()[0][0]
+    avg_family = cluster_data.agg(avg("APPLICANT_FAMILY_COUNT")).collect()[0][0]
     print(f"  Average Family Count: {avg_family:.1f}")
 
     # Marital status distribution
     print(f"  Marital Status Distribution:")
-    cluster_data.groupBy("MARITALSTATUS").count().orderBy("count", ascending=False).show(5, truncate=False)
+    cluster_data.groupBy("MARITAL_STATUS").count().orderBy("count", ascending=False).show(5, truncate=False)
 
     # Gender distribution
     print(f"  Gender Distribution:")
-    cluster_data.groupBy("GENDERDESC").count().orderBy("count", ascending=False).show(5, truncate=False)
+    cluster_data.groupBy("GENDER_DESC").count().orderBy("count", ascending=False).show(5, truncate=False)
 
     # Approval rate
-    approval_rate = (cluster_data.filter(col("APPROVALLABEL") == 1).count() / cluster_count) * 100
+    approval_rate = (cluster_data.filter(col("APPROVAL_LABEL") == 1).count() / cluster_count) * 100
     print(f"  Approval Rate: {approval_rate:.2f}%\n")
 
 # ============================================================================
