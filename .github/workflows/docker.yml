@@ -11,13 +11,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build image
-        run: docker build -t project1_final:latest ./project1_final
+        run: docker build -t project1_final:latest .
 
       - name: Run container
-        run: docker run --rm -v "$PWD/project1_final/out:/app/out" project1_final:latest
+        run: docker run --rm -v "$PWD/out:/app/out" project1_final:latest
 
       - name: Upload outputs
         uses: actions/upload-artifact@v4
         with:
           name: out
-          path: project1_final/out
+          path: out
