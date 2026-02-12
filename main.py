@@ -8,7 +8,7 @@ from io import StringIO
 # PySpark imports
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col, when, year, datediff, lit, monthsbetween, floor,
+    col, when, year, datediff, lit, floor,
     count, avg, min, max, stddev
 )
 from pyspark.sql.types import IntegerType
@@ -22,6 +22,7 @@ from pyspark.sql.types import IntegerType
 from pyspark.sql.functions import (  # noqa: E402
     current_date as currentdate,
     to_date as todate,
+    months_between as monthsbetween,
     monotonically_increasing_id as monotonicallyincreasingid,
 )
 
