@@ -52,7 +52,7 @@ from sklearn.metrics import confusion_matrix, roc_curve, auc
 # CONFIGURATION
 # ============================================================================
 
-DATA_PATH = "Mrhe_Land_Grants.csv"
+DATA_PATH = "MrheLandGrants.csv"
 OUTPUT_DIR = "out"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
