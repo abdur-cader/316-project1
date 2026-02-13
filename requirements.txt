@@ -3,3 +3,4 @@ pandas
 matplotlib
 seaborn
 pyspark==3.5.3
+scikit-learn
